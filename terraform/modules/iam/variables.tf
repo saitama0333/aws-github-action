@@ -22,3 +22,18 @@ variable "ecr_repository_arn" {
   description = "ARN of the ECR repository GitHub Actions can push to."
   type        = string
 }
+
+variable "ecs_task_execution_role_name" {
+  description = "Name of the ECS task execution IAM role."
+  type        = string
+}
+
+variable "ecs_task_role_name" {
+  description = "Name of the ECS application task IAM role."
+  type        = string
+}
+
+variable "log_group_arn" {
+  description = "ARN of the CloudWatch Logs group used by ECS tasks."
+  type        = string
+}

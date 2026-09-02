@@ -34,6 +34,13 @@ module "ecr" {
   force_delete         = true
 }
 
+module "cloudwatch" {
+  source = "../../modules/cloudwatch"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+
 module "iam" {
   source = "../../modules/iam"
 
@@ -43,5 +50,8 @@ module "iam" {
   github_repository = var.github_repository
   github_branch     = var.github_branch
 
-  ecr_repository_arn = module.ecr.repository_arn
+  ecr_repository_arn           = module.ecr.repository_arn
+  ecs_task_execution_role_name = "${var.project_name}-${var.environment}-ecs-execution"
+  ecs_task_role_name           = "${var.project_name}-${var.environment}-ecs-task"
+  log_group_arn                = module.cloudwatch.log_group_arn
 }
