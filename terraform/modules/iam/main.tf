@@ -160,7 +160,7 @@ data "aws_iam_policy_document" "ecs_task_execution_permissions" {
     ]
 
     resources = [
-      var.log_group_arn
+  "${var.log_group_arn}:*"
     ]
   }
 }

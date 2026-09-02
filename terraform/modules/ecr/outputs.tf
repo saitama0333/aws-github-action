@@ -17,3 +17,4 @@ output "registry_id" {
   description = "AWS account ID of the ECR registry."
   value       = aws_ecr_repository.this.registry_id
 }
+
