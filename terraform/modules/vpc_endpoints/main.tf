@@ -29,11 +29,11 @@ resource "aws_security_group" "endpoints" {
   }
 
   egress {
-    description = "Allow outbound HTTPS"
+    description = "Allow HTTPS to VPC CIDR"
     protocol    = "tcp"
     from_port   = 443
     to_port     = 443
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [data.aws_vpc.this.cidr_block]
   }
 
   tags = {
