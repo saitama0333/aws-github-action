@@ -37,6 +37,25 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+  terraform-security:
+    name: Terraform Security
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Scan Terraform configuration with Trivy
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: terraform
+          hide-progress: true
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
   gitleaks:
     name: Gitleaks
     runs-on: ubuntu-24.04
