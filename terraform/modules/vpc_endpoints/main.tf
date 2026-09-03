@@ -21,11 +21,11 @@ resource "aws_security_group" "endpoints" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "HTTPS from VPC"
-    protocol    = "tcp"
-    from_port   = 443
-    to_port     = 443
-    cidr_blocks = [data.aws_vpc.this.cidr_block]
+    description     = "HTTPS from ECS tasks"
+    protocol        = "tcp"
+    from_port       = 443
+    to_port         = 443
+    security_groups = [var.ecs_task_security_group_id]
   }
 
   egress {

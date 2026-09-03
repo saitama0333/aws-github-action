@@ -27,3 +27,8 @@ variable "aws_region" {
   description = "AWS region where the VPC endpoints will be created."
   type        = string
 }
+
+variable "ecs_task_security_group_id" {
+  description = "Security group ID of the ECS Fargate tasks."
+  type        = string
+}

@@ -17,9 +17,10 @@ module "vpc_endpoints" {
   project_name = var.project_name
   environment  = var.environment
 
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  route_table_ids    = module.vpc.private_route_table_ids
+  vpc_id                     = module.vpc.vpc_id
+  private_subnet_ids         = module.vpc.private_subnet_ids
+  route_table_ids            = module.vpc.private_route_table_ids
+  ecs_task_security_group_id = module.ecs.task_security_group_id
 }
 
 module "ecr" {
