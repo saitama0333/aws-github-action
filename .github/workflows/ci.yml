@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Debug GitHub context
+      - name: Debug GitHub OIDC context
         run: |
           echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
           echo "GITHUB_REF=$GITHUB_REF"
@@ -45,11 +45,6 @@ jobs:
         with:
           terraform_version: 1.14.0
 
-      - name: Debug Terraform checkout
-        run: |
-          git rev-parse HEAD
-          sha256sum main.tf
-          
       - name: Terraform Format Check
         run: terraform fmt -check -recursive ../../..
 
@@ -94,12 +89,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    name: Docker Build and Scan
+    name: Docker Build, Scan and Push
     runs-on: ubuntu-24.04
+
+    env:
+      AWS_REGION: ap-south-1
+      ECR_REGISTRY: 960645511169.dkr.ecr.ap-south-1.amazonaws.com
+      ECR_REPOSITORY: saitama-github-action/dev/app
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::960645511169:role/saitama-github-action-dev-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: aws-actions/amazon-ecr-login@b040164c4934333d597f3f9c67502ff28f814e9c # v2.1.6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -111,15 +123,20 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: aws-github-action:ci-${{ github.sha }}
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          image-ref: aws-github-action:ci-${{ github.sha }}
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           format: table
           exit-code: 1
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
+      - name: Push Docker image to ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
