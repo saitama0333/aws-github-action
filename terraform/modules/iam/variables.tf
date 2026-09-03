@@ -37,3 +37,8 @@ variable "log_group_arn" {
   description = "ARN of the CloudWatch Logs group used by ECS tasks."
   type        = string
 }
+
+variable "ecs_service_arn" {
+  description = "ARN of the ECS service GitHub Actions can deploy."
+  type        = string
+}

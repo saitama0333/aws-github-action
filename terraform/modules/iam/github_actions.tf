@@ -35,6 +35,51 @@ data "aws_iam_policy_document" "github_actions_permissions" {
 
     resources = ["*"]
   }
+  statement {
+    sid    = "ECSRegisterTaskDefinition"
+    effect = "Allow"
+
+    actions = [
+      "ecs:RegisterTaskDefinition",
+      "ecs:DescribeTaskDefinition"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ECSServiceDeployment"
+    effect = "Allow"
+
+    actions = [
+      "ecs:UpdateService",
+      "ecs:DescribeServices"
+    ]
+
+    resources = [
+      var.ecs_service_arn
+    ]
+  }
+
+  statement {
+    sid    = "ECSTaskRolePass"
+    effect = "Allow"
+
+    actions = [
+      "iam:PassRole"
+    ]
+
+    resources = [
+      aws_iam_role.ecs_task_execution.arn,
+      aws_iam_role.ecs_task.arn
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions" {
