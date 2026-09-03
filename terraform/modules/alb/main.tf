@@ -24,8 +24,8 @@ resource "aws_security_group" "alb" {
   }
 }
 
+# Public ALB is intentional: it is the internet-facing entry point for this showcase application.
 #trivy:ignore:AWS-0053
-
 resource "aws_lb" "this" {
   name                       = "${var.project_name}-${var.environment}-alb"
   internal                   = false
