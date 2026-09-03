@@ -38,7 +38,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
 
       values = [
-        "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"
+        "repo:saitama0333@33102305/aws-github-action@114854757:ref:refs/heads/${var.github_branch}"
       ]
     }
   }

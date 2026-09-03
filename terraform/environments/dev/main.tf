@@ -55,7 +55,7 @@ module "iam" {
   ecs_task_execution_role_name = "${var.project_name}-${var.environment}-ecs-execution"
   ecs_task_role_name           = "${var.project_name}-${var.environment}-ecs-task"
   log_group_arn                = module.cloudwatch.log_group_arn
-  ecs_service_arn = module.ecs.service_arn
+  ecs_service_arn              = module.ecs.service_arn
 
 }
 
