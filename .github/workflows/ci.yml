@@ -16,6 +16,9 @@ jobs:
     name: Terraform
     runs-on: ubuntu-24.04
 
+    outputs:
+      alb_dns_name: ${{ steps.alb.outputs.alb_dns_name }}
+
     defaults:
       run:
         working-directory: terraform/environments/dev
@@ -54,6 +57,23 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Export ALB DNS
+        id: alb
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --region ap-south-1 \
+            --names saitama-github-action-dev-alb \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+
+          if [ -z "$ALB_DNS" ] || [ "$ALB_DNS" = "None" ]; then
+            echo "ALB was not found."
+            exit 1
+          fi
+
+          echo "ALB DNS: $ALB_DNS"
+          echo "alb_dns_name=$ALB_DNS" >> "$GITHUB_OUTPUT"
+
   terraform-security:
     name: Terraform Security
     runs-on: ubuntu-24.04
@@ -90,6 +110,7 @@ jobs:
 
   docker:
     name: Docker Build, Scan, Push and Deploy
+    needs: terraform
     runs-on: ubuntu-24.04
 
     env:
@@ -183,3 +204,27 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           wait-max-delay-seconds: 15
+
+      - name: Smoke test application
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        env:
+          ALB_DNS: ${{ needs.terraform.outputs.alb_dns_name }}
+        run: |
+          echo "Testing http://${ALB_DNS}/health"
+
+          for attempt in {1..10}; do
+            if curl --fail --silent --show-error \
+              --connect-timeout 5 \
+              --max-time 10 \
+              "http://${ALB_DNS}/health"; then
+              echo
+              echo "Smoke test passed."
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/10 failed. Waiting 10 seconds..."
+            sleep 10
+          done
+
+          echo "Smoke test failed."
+          exit 1

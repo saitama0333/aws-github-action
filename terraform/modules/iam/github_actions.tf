@@ -62,6 +62,17 @@ data "aws_iam_policy_document" "github_actions_permissions" {
   }
 
   statement {
+    sid    = "ELBDescribeLoadBalancers"
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:DescribeLoadBalancers"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
     sid    = "ECSTaskRolePass"
     effect = "Allow"
 

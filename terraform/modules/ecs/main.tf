@@ -1,3 +1,7 @@
+data "aws_prefix_list" "s3" {
+  name = "com.amazonaws.${var.aws_region}.s3"
+}
+
 resource "aws_ecs_cluster" "this" {
   name = "${var.project_name}-${var.environment}"
 
@@ -25,11 +29,35 @@ resource "aws_security_group" "tasks" {
   }
 
   egress {
-    description = "Allow outbound HTTPS"
+    description = "Allow DNS UDP to VPC resolver"
+    protocol    = "udp"
+    from_port   = 53
+    to_port     = 53
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "Allow DNS TCP to VPC resolver"
+    protocol    = "tcp"
+    from_port   = 53
+    to_port     = 53
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "Allow HTTPS to AWS PrivateLink endpoints"
     protocol    = "tcp"
     from_port   = 443
     to_port     = 443
     cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description     = "Allow HTTPS to S3 gateway endpoint"
+    protocol        = "tcp"
+    from_port       = 443
+    to_port         = 443
+    prefix_list_ids = [data.aws_prefix_list.s3.id]
   }
 
   tags = {
@@ -128,7 +156,7 @@ resource "aws_ecs_service" "this" {
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 
-  platform_version = "LATEST"
+  platform_version = "1.4.0"
 
   enable_ecs_managed_tags = true
 

@@ -47,3 +47,8 @@ output "github_oidc_provider_arn" {
   description = "ARN of the GitHub OIDC provider."
   value       = module.iam.github_oidc_provider_arn
 }
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer."
+  value       = module.alb.load_balancer_dns_name
+}
