@@ -166,6 +166,24 @@ jobs:
         run: |
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+      - name: Capture current ECS task definition
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          PREVIOUS_TASK_DEFINITION=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          if [ -z "$PREVIOUS_TASK_DEFINITION" ] || [ "$PREVIOUS_TASK_DEFINITION" = "None" ]; then
+            echo "Could not determine current ECS task definition."
+            exit 1
+          fi
+
+          echo "Previous task definition: $PREVIOUS_TASK_DEFINITION"
+          echo "PREVIOUS_TASK_DEFINITION=$PREVIOUS_TASK_DEFINITION" >> "$GITHUB_ENV"
+
       - name: Download current ECS task definition
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         run: |
@@ -206,6 +224,7 @@ jobs:
           wait-max-delay-seconds: 15
 
       - name: Smoke test application
+        id: smoke-test
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         env:
           ALB_DNS: ${{ needs.terraform.outputs.alb_dns_name }}
@@ -228,3 +247,46 @@ jobs:
 
           echo "Smoke test failed."
           exit 1
+
+      - name: Roll back ECS deployment
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/develop' && env.PREVIOUS_TASK_DEFINITION != ''
+        run: |
+          echo "Deployment failed."
+          echo "Rolling back ECS service to:"
+          echo "$PREVIOUS_TASK_DEFINITION"
+
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$PREVIOUS_TASK_DEFINITION" \
+            --force-new-deployment
+
+          echo "Waiting for ECS rollback to stabilize..."
+
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
+
+          echo "ECS rollback completed successfully."
+
+      - name: Verify rollback
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/develop' && env.PREVIOUS_TASK_DEFINITION != ''
+        run: |
+          CURRENT_TASK_DEFINITION=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          echo "Current task definition after rollback:"
+          echo "$CURRENT_TASK_DEFINITION"
+
+          if [ "$CURRENT_TASK_DEFINITION" != "$PREVIOUS_TASK_DEFINITION" ]; then
+            echo "Rollback verification failed."
+            exit 1
+          fi
+
+          echo "Rollback verified successfully."
