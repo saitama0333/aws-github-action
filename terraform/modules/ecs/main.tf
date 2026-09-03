@@ -121,6 +121,10 @@ resource "aws_ecs_service" "this" {
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.this.arn
 
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 

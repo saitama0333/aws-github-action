@@ -89,7 +89,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    name: Docker Build, Scan and Push
+    name: Docker Build, Scan, Push and Deploy
     runs-on: ubuntu-24.04
 
     env:
@@ -97,6 +97,10 @@ jobs:
       ECR_REGISTRY: 960645511169.dkr.ecr.ap-south-1.amazonaws.com
       ECR_REPOSITORY: saitama-github-action/dev/app
       IMAGE_TAG: ${{ github.sha }}
+      ECS_CLUSTER: saitama-github-action-dev
+      ECS_SERVICE: saitama-github-action-dev
+      ECS_TASK_DEFINITION: saitama-github-action-dev
+      ECS_CONTAINER_NAME: app
 
     steps:
       - name: Checkout
@@ -111,7 +115,7 @@ jobs:
 
       - name: Login to Amazon ECR
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        uses: aws-actions/amazon-ecr-login@b040164c4934333d597f3f9c67502ff28f814e9c # v2.1.6
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -140,3 +144,42 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         run: |
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+      - name: Download current ECS task definition
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      - name: Render new image in ECS task definition
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        id: render-task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@138c24f321fdbdf7edee4a685519d253cae2cdea # v1.9.0
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      - name: Update application version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        env:
+          TASK_DEFINITION_FILE: ${{ steps.render-task-definition.outputs.task-definition }}
+        run: |
+          jq \
+            --arg version "$IMAGE_TAG" \
+            '(.containerDefinitions[] | select(.name == "app") | .environment) |= map(if .name == "APP_VERSION" then .value = $version else . end)' \
+            "$TASK_DEFINITION_FILE" > task-definition-versioned.json
+
+          mv task-definition-versioned.json "$TASK_DEFINITION_FILE"
+
+      - name: Deploy to Amazon ECS
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@c465972ecbd160473f22e683363b422a5412a3de # v2.6.3
+        with:
+          task-definition: ${{ steps.render-task-definition.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-max-delay-seconds: 15
