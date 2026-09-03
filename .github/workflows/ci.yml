@@ -45,6 +45,11 @@ jobs:
         with:
           terraform_version: 1.14.0
 
+      - name: Debug Terraform checkout
+        run: |
+          git rev-parse HEAD
+          sha256sum main.tf
+          
       - name: Terraform Format Check
         run: terraform fmt -check -recursive ../../..
 
