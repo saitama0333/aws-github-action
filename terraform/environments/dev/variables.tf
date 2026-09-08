@@ -9,12 +9,11 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment."
-  type        = string
+  type = string
 
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be dev, staging, or prod."
+    condition     = contains(["dev", "qa", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, qa, prod."
   }
 }
 
@@ -33,23 +32,44 @@ variable "availability_zones" {
   }
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets. Must match availability_zones length."
-  type        = list(string)
+variable "public_subnets" {
+  type = map(object({
+    az   = string
+    cidr = string
+  }))
 
   validation {
-    condition     = length(var.public_subnet_cidrs) == length(var.availability_zones)
-    error_message = "public_subnet_cidrs must have the same number of entries as availability_zones."
+    condition = alltrue([
+      for subnet in values(var.public_subnets) :
+      contains(var.availability_zones, subnet.az)
+    ])
+
+    error_message = "Every public subnet AZ must exist in availability_zones."
   }
 }
 
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets. Must match availability_zones length."
-  type        = list(string)
+variable "private_subnets" {
+  type = map(object({
+    az   = string
+    cidr = string
+  }))
 
   validation {
-    condition     = length(var.private_subnet_cidrs) == length(var.availability_zones)
-    error_message = "private_subnet_cidrs must have the same number of entries as availability_zones."
+    condition = alltrue([
+      for subnet in values(var.private_subnets) :
+      contains(var.availability_zones, subnet.az)
+    ])
+
+    error_message = "Every private subnet AZ must exist in availability_zones."
+  }
+}
+
+variable "nat_subnet_name" {
+  type = string
+
+  validation {
+    condition     = contains(keys(var.public_subnets), var.nat_subnet_name)
+    error_message = "nat_subnet_name must reference an existing public subnet."
   }
 }
 

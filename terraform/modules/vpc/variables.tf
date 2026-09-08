@@ -1,29 +1,61 @@
 variable "project_name" {
-  description = "Project name used for resource naming."
-  type        = string
+  type = string
 }
 
 variable "environment" {
-  description = "Environment name."
-  type        = string
+  type = string
 }
 
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
-  type        = string
+  type = string
 }
 
 variable "availability_zones" {
-  description = "Availability Zones for the VPC."
-  type        = list(string)
+  type = list(string)
+
+  validation {
+    condition     = length(var.availability_zones) >= 2
+    error_message = "At least 2 availability zones are required."
+  }
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets."
-  type        = list(string)
+variable "public_subnets" {
+  type = map(object({
+    az   = string
+    cidr = string
+  }))
+
+  validation {
+    condition = alltrue([
+      for subnet in values(var.public_subnets) :
+      contains(var.availability_zones, subnet.az)
+    ])
+
+    error_message = "Every public subnet AZ must exist in availability_zones."
+  }
 }
 
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets."
-  type        = list(string)
+variable "private_subnets" {
+  type = map(object({
+    az   = string
+    cidr = string
+  }))
+
+  validation {
+    condition = alltrue([
+      for subnet in values(var.private_subnets) :
+      contains(var.availability_zones, subnet.az)
+    ])
+
+    error_message = "Every private subnet AZ must exist in availability_zones."
+  }
+}
+
+variable "nat_subnet_name" {
+  type = string
+
+  validation {
+    condition     = contains(keys(var.public_subnets), var.nat_subnet_name)
+    error_message = "nat_subnet_name must reference an existing public subnet."
+  }
 }

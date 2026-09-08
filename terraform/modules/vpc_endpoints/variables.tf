@@ -32,3 +32,18 @@ variable "ecs_task_security_group_id" {
   description = "Security group ID of the ECS Fargate tasks."
   type        = string
 }
+
+variable "private_subnet_definitions" {
+  description = "Private subnet definitions including subnet name and availability zone."
+
+  type = map(object({
+    az   = string
+    cidr = string
+  }))
+}
+
+variable "availability_zones" {
+  description = "Availability zones used by the VPC."
+
+  type = list(string)
+}

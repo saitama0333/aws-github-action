@@ -60,10 +60,19 @@ resource "aws_vpc_endpoint" "s3" {
 resource "aws_vpc_endpoint" "interface" {
   for_each = local.interface_endpoints
 
-  vpc_id              = var.vpc_id
-  service_name        = each.value.service_name
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(var.private_subnet_ids)
+  vpc_id            = var.vpc_id
+  service_name      = each.value.service_name
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids = [
+    for az in var.availability_zones :
+    [
+      for name, subnet_id in var.private_subnet_ids :
+      subnet_id
+      if var.private_subnet_definitions[name].az == az
+    ][0]
+  ]
+
   security_group_ids  = [aws_security_group.endpoints.id]
   private_dns_enabled = true
 
