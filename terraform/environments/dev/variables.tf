@@ -87,3 +87,8 @@ variable "initial_image_tag" {
   description = "Existing ECR image tag used by Terraform when creating the initial ECS task definition."
   type        = string
 }
+
+variable "github_oidc_subject" {
+  description = "Immutable GitHub OIDC subject allowed to assume the Dev deployment role."
+  type        = string
+}

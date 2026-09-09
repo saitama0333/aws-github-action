@@ -42,3 +42,8 @@ variable "ecs_service_arn" {
   description = "ARN of the ECS service GitHub Actions can deploy."
   type        = string
 }
+
+variable "github_oidc_subject" {
+  description = "Immutable GitHub OIDC subject allowed to assume the deployment role."
+  type        = string
+}

@@ -50,8 +50,9 @@ module "iam" {
   project_name = var.project_name
   environment  = var.environment
 
-  github_repository = var.github_repository
-  github_branch     = var.github_branch
+  github_repository   = var.github_repository
+  github_branch       = var.github_branch
+  github_oidc_subject = var.github_oidc_subject
 
   ecr_repository_arn           = module.ecr.repository_arn
   ecs_task_execution_role_name = "${var.project_name}-${var.environment}-ecs-execution"
