@@ -99,7 +99,8 @@ data "aws_iam_policy_document" "github_actions_permissions" {
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer"
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:DescribeImages"
     ]
 
     resources = compact([
