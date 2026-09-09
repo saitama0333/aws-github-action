@@ -91,6 +91,21 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       values   = ["ecs-tasks.amazonaws.com"]
     }
   }
+
+  statement {
+    sid    = "ECRPromotionPull"
+    effect = "Allow"
+
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer"
+    ]
+
+    resources = compact([
+      var.source_ecr_repository_arn
+    ])
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions" {

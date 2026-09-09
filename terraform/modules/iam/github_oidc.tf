@@ -1,4 +1,6 @@
 resource "aws_iam_openid_connect_provider" "github" {
+  count = var.github_oidc_provider_arn == null ? 1 : 0
+
   url = "https://token.actions.githubusercontent.com"
 
   client_id_list = [
@@ -8,6 +10,10 @@ resource "aws_iam_openid_connect_provider" "github" {
   tags = {
     Name = "${var.project_name}-${var.environment}-github-oidc"
   }
+}
+
+locals {
+  github_oidc_provider_arn = var.github_oidc_provider_arn != null ? var.github_oidc_provider_arn : aws_iam_openid_connect_provider.github[0].arn
 }
 
 data "aws_iam_policy_document" "github_actions_assume_role" {
@@ -20,7 +26,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       type = "Federated"
 
       identifiers = [
-        aws_iam_openid_connect_provider.github.arn
+        local.github_oidc_provider_arn
       ]
     }
 
@@ -36,7 +42,10 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [var.github_oidc_subject]
+
+      values = [
+        var.github_oidc_subject
+      ]
     }
   }
 }

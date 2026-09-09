@@ -47,3 +47,15 @@ variable "github_oidc_subject" {
   description = "Immutable GitHub OIDC subject allowed to assume the deployment role."
   type        = string
 }
+
+variable "github_oidc_provider_arn" {
+  description = "Existing GitHub OIDC provider ARN. If null, this module creates the provider."
+  type        = string
+  default     = null
+}
+
+variable "source_ecr_repository_arn" {
+  description = "ARN of the source ECR repository used for artifact promotion."
+  type        = string
+  default     = null
+}
