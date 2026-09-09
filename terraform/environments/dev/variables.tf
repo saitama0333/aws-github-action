@@ -82,3 +82,8 @@ variable "github_branch" {
   description = "GitHub branch allowed to deploy to AWS."
   type        = string
 }
+
+variable "initial_image_tag" {
+  description = "Existing ECR image tag used by Terraform when creating the initial ECS task definition."
+  type        = string
+}

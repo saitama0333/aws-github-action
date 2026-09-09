@@ -150,11 +150,17 @@ resource "aws_ecs_service" "this" {
   task_definition = aws_ecs_task_definition.this.arn
 
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [
+      task_definition,
+      desired_count
+    ]
   }
 
-  desired_count = var.desired_count
-  launch_type   = "FARGATE"
+  # Terraform creates the ECS service, but GitHub Actions owns
+  # the application deployment and desired running task count.
+  desired_count = 0
+
+  launch_type = "FARGATE"
 
   platform_version = "1.4.0"
 

@@ -169,7 +169,7 @@ jobs:
         run: |
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-      - name: Capture current ECS task definition
+      - name: Capture current ECS deployment state
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         run: |
           PREVIOUS_TASK_DEFINITION=$(aws ecs describe-services \
@@ -179,13 +179,28 @@ jobs:
             --query 'services[0].taskDefinition' \
             --output text)
 
+          PREVIOUS_DESIRED_COUNT=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].desiredCount' \
+            --output text)
+
           if [ -z "$PREVIOUS_TASK_DEFINITION" ] || [ "$PREVIOUS_TASK_DEFINITION" = "None" ]; then
             echo "Could not determine current ECS task definition."
             exit 1
           fi
 
+          if [ -z "$PREVIOUS_DESIRED_COUNT" ] || [ "$PREVIOUS_DESIRED_COUNT" = "None" ]; then
+            echo "Could not determine current ECS desired count."
+            exit 1
+          fi
+
           echo "Previous task definition: $PREVIOUS_TASK_DEFINITION"
+          echo "Previous desired count: $PREVIOUS_DESIRED_COUNT"
+
           echo "PREVIOUS_TASK_DEFINITION=$PREVIOUS_TASK_DEFINITION" >> "$GITHUB_ENV"
+          echo "PREVIOUS_DESIRED_COUNT=$PREVIOUS_DESIRED_COUNT" >> "$GITHUB_ENV"
 
       - name: Download current ECS task definition
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
@@ -216,15 +231,35 @@ jobs:
 
           mv task-definition-versioned.json "$TASK_DEFINITION_FILE"
 
-      - name: Deploy to Amazon ECS
+      - name: Deploy new ECS task definition
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         uses: aws-actions/amazon-ecs-deploy-task-definition@c465972ecbd160473f22e683363b422a5412a3de # v2.6.3
         with:
           task-definition: ${{ steps.render-task-definition.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
-          wait-max-delay-seconds: 15
+          wait-for-service-stability: false
+
+      - name: Start ECS service
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --desired-count 1
+
+      - name: Wait for ECS service stability
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: |
+          echo "Waiting for ECS service to become stable..."
+
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
+
+          echo "ECS service is stable."
 
       - name: Smoke test application
         id: smoke-test
@@ -263,6 +298,7 @@ jobs:
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_SERVICE" \
             --task-definition "$PREVIOUS_TASK_DEFINITION" \
+            --desired-count "$PREVIOUS_DESIRED_COUNT" \
             --force-new-deployment
 
           echo "Waiting for ECS rollback to stabilize..."

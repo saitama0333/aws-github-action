@@ -85,13 +85,13 @@ module "ecs" {
   vpc_cidr           = var.vpc_cidr
   private_subnet_ids = module.vpc.private_subnet_ids
 
-  container_image = "${module.ecr.repository_url}:manual-001"
+  container_image = "${module.ecr.repository_url}:${var.initial_image_tag}"
   container_name  = "app"
   container_port  = 8080
   cpu             = 256
   memory          = 512
   desired_count   = 1
-  app_version     = "manual-001"
+  app_version     = var.initial_image_tag
 
   execution_role_arn = module.iam.ecs_task_execution_role_arn
   task_role_arn      = module.iam.ecs_task_role_arn
