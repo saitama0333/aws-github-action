@@ -260,13 +260,13 @@ jobs:
         env:
           ALB_DNS: ${{ needs.terraform.outputs.alb_dns_name }}
         run: |
-          echo "Testing http://${ALB_DNS}/health"
+          echo "Testing http://${ALB_DNS}/health-does-not-exist"
 
           for attempt in {1..10}; do
             if curl --fail --silent --show-error \
               --connect-timeout 5 \
               --max-time 10 \
-              "http://${ALB_DNS}/health"; then
+              "http://${ALB_DNS}/health-does-not-exist"; then
               echo
               echo "Smoke test passed."
               exit 0
