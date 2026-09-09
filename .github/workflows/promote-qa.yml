@@ -1,0 +1,233 @@
+name: Promote to QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Dev image SHA to promote"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+
+  DEV_ECR_REGISTRY: 960645511169.dkr.ecr.ap-south-1.amazonaws.com
+  DEV_ECR_REPOSITORY: saitama-github-action/dev/app
+
+  QA_ECR_REGISTRY: 960645511169.dkr.ecr.ap-south-1.amazonaws.com
+  QA_ECR_REPOSITORY: saitama-github-action/qa/app
+
+  ECS_CLUSTER: saitama-github-action-qa
+  ECS_SERVICE: saitama-github-action-qa
+  ECS_TASK_DEFINITION: saitama-github-action-qa
+  CONTAINER_NAME: app
+
+jobs:
+  promote:
+    name: Promote image to QA
+    runs-on: ubuntu-latest
+
+    environment:
+      name: qa
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::960645511169:role/saitama-github-action-qa-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Pull Dev image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          docker pull \
+            "$DEV_ECR_REGISTRY/$DEV_ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Get Dev image digest
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          SOURCE_DIGEST=$(aws ecr describe-images \
+            --region "$AWS_REGION" \
+            --repository-name "$DEV_ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+
+          if [ "$SOURCE_DIGEST" = "None" ] || [ -z "$SOURCE_DIGEST" ]; then
+            echo "Source image was not found."
+            exit 1
+          fi
+
+          echo "Dev image digest: $SOURCE_DIGEST"
+          echo "SOURCE_DIGEST=$SOURCE_DIGEST" >> "$GITHUB_ENV"
+
+      - name: Tag image for QA
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          docker tag \
+            "$DEV_ECR_REGISTRY/$DEV_ECR_REPOSITORY:$IMAGE_TAG" \
+            "$QA_ECR_REGISTRY/$QA_ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Push image to QA ECR
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          docker push \
+            "$QA_ECR_REGISTRY/$QA_ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Verify QA image digest
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          QA_DIGEST=$(aws ecr describe-images \
+            --region "$AWS_REGION" \
+            --repository-name "$QA_ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+
+          echo "Dev digest: $SOURCE_DIGEST"
+          echo "QA digest:  $QA_DIGEST"
+
+          if [ "$SOURCE_DIGEST" != "$QA_DIGEST" ]; then
+            echo "ERROR: Dev and QA image digests do not match."
+            exit 1
+          fi
+
+          echo "Image digest verified successfully."
+
+      - name: Capture previous deployment
+        id: previous
+        run: |
+          set -euo pipefail
+
+          PREVIOUS_TASK_DEFINITION=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          PREVIOUS_DESIRED_COUNT=$(aws ecs describe-services \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          echo "previous_task_definition=$PREVIOUS_TASK_DEFINITION" >> "$GITHUB_OUTPUT"
+          echo "previous_desired_count=$PREVIOUS_DESIRED_COUNT" >> "$GITHUB_OUTPUT"
+
+          echo "Previous task definition: $PREVIOUS_TASK_DEFINITION"
+          echo "Previous desired count: $PREVIOUS_DESIRED_COUNT"
+
+      - name: Download current task definition
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-task-definition \
+            --region "$AWS_REGION" \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query 'taskDefinition' \
+            > task-definition.json
+
+      - name: Render promoted image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.QA_ECR_REGISTRY }}/${{ env.QA_ECR_REPOSITORY }}:${{ inputs.image_tag }}
+
+      - name: Deploy to QA
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: false
+
+      - name: Start QA service
+        run: |
+          set -euo pipefail
+
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --desired-count 1
+
+      - name: Wait for QA stability
+        run: |
+          set -euo pipefail
+
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
+
+      - name: QA health check
+        env:
+          QA_ALB_DNS: saitama-github-action-qa-alb-171641229.ap-south-1.elb.amazonaws.com
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..10}; do
+            echo "Health check attempt $attempt/10"
+
+            if curl --fail --silent --show-error \
+              "http://$QA_ALB_DNS/health"; then
+              echo
+              echo "QA health check passed."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "QA health check failed."
+          exit 1
+
+      - name: Rollback QA
+        if: failure() && steps.previous.outputs.previous_task_definition != ''
+        run: |
+          set -euo pipefail
+
+          echo "Rolling back QA..."
+
+          aws ecs update-service \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.previous.outputs.previous_task_definition }}" \
+            --desired-count "${{ steps.previous.outputs.previous_desired_count }}"
+
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
+
+          echo "QA rollback completed."
