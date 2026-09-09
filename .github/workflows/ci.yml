@@ -34,6 +34,14 @@ jobs:
           echo "GITHUB_REF_NAME=$GITHUB_REF_NAME"
           echo "GITHUB_SHA=$GITHUB_SHA"
 
+      - name: Debug GitHub OIDC claims
+        shell: bash
+        run: |
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL is set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+
       - name: Configure AWS credentials
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
